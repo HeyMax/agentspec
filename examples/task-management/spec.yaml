@@ -1,0 +1,925 @@
+kind: FeatureSpec
+version: "1.0"
+name: task-management
+display_name: Task Management
+owner: product-team
+description: >
+  A collaborative task management system supporting projects, tasks with
+  priority and status workflows, assignments, and comments.
+
+tags:
+  - productivity
+  - collaboration
+  - project-management
+
+# ─── Enums ─────────────────────────────────────────────────────
+
+enums:
+  task-priority:
+    description: Task urgency levels
+    values:
+      - name: low
+        value: low
+        description: Can be addressed when convenient
+      - name: medium
+        value: medium
+        description: Should be addressed in current sprint
+      - name: high
+        value: high
+        description: Needs attention soon
+      - name: critical
+        value: critical
+        description: Must be resolved immediately
+
+  task-status:
+    description: Task lifecycle states
+    values:
+      - name: todo
+        value: todo
+        description: Not yet started
+      - name: in_progress
+        value: in_progress
+        description: Currently being worked on
+      - name: in_review
+        value: in_review
+        description: Work complete, awaiting review
+      - name: done
+        value: done
+        description: Fully completed
+      - name: cancelled
+        value: cancelled
+        description: Will not be completed
+
+  user-role:
+    description: User permission levels
+    values:
+      - name: admin
+        value: admin
+        description: Full system access
+      - name: member
+        value: member
+        description: Standard project member
+      - name: viewer
+        value: viewer
+        description: Read-only access
+
+# ─── Models ────────────────────────────────────────────────────
+
+models:
+  User:
+    description: A registered user who can create projects, be assigned tasks, and leave comments.
+    fields:
+      id:
+        type: uuid
+        required: true
+        description: Unique identifier
+        constraints:
+          immutable: true
+      email:
+        type: string
+        required: true
+        description: Login email address
+        constraints:
+          unique: true
+          pattern: "^[^@]+@[^@]+$"
+      name:
+        type: string
+        required: true
+        description: Display name
+        constraints:
+          min_length: 1
+          max_length: 100
+      role:
+        type: "enum:user-role"
+        required: true
+        description: System-wide role
+      avatar_url:
+        type: string
+        required: false
+        description: Profile picture URL
+      created_at:
+        type: datetime
+        required: true
+        description: Registration timestamp
+        constraints:
+          immutable: true
+
+  Project:
+    description: A container for related tasks, owned by a user.
+    fields:
+      id:
+        type: uuid
+        required: true
+        description: Unique identifier
+        constraints:
+          immutable: true
+      name:
+        type: string
+        required: true
+        description: Project name
+        constraints:
+          min_length: 1
+          max_length: 200
+      description:
+        type: string
+        required: false
+        description: Project description
+      owner_id:
+        type: "ref:User"
+        required: true
+        description: The user who owns this project
+      members:
+        type: "[]ref:User"
+        required: false
+        description: Users participating in this project
+      created_at:
+        type: datetime
+        required: true
+        description: Creation timestamp
+        constraints:
+          immutable: true
+      updated_at:
+        type: datetime
+        required: true
+        description: Last modification timestamp
+    indexes:
+      - fields: [owner_id]
+      - fields: [name, owner_id]
+        unique: true
+
+  Task:
+    description: A unit of work within a project, with status tracking and assignment.
+    fields:
+      id:
+        type: uuid
+        required: true
+        description: Unique identifier
+        constraints:
+          immutable: true
+      title:
+        type: string
+        required: true
+        description: Short task title
+        constraints:
+          min_length: 1
+          max_length: 300
+      description:
+        type: string
+        required: false
+        description: Detailed task description
+      project_id:
+        type: "ref:Project"
+        required: true
+        description: The project this task belongs to
+        constraints:
+          immutable: true
+      assignee_id:
+        type: "ref:User"
+        required: false
+        description: The user assigned to this task
+      status:
+        type: "enum:task-status"
+        required: true
+        description: Current lifecycle state
+      priority:
+        type: "enum:task-priority"
+        required: true
+        description: Urgency level
+      due_date:
+        type: datetime
+        required: false
+        description: Target completion date
+      created_at:
+        type: datetime
+        required: true
+        description: Creation timestamp
+        constraints:
+          immutable: true
+      updated_at:
+        type: datetime
+        required: true
+        description: Last modification timestamp
+    states:
+      field: status
+      values: [todo, in_progress, in_review, done, cancelled]
+      transitions:
+        todo: [in_progress, cancelled]
+        in_progress: [in_review, todo, cancelled]
+        in_review: [done, in_progress]
+        done: []
+        cancelled: []
+    indexes:
+      - fields: [project_id, status]
+      - fields: [assignee_id]
+      - fields: [due_date]
+
+  Comment:
+    description: A text comment attached to a task.
+    fields:
+      id:
+        type: uuid
+        required: true
+        description: Unique identifier
+        constraints:
+          immutable: true
+      task_id:
+        type: "ref:Task"
+        required: true
+        description: The task this comment belongs to
+        constraints:
+          immutable: true
+      author_id:
+        type: "ref:User"
+        required: true
+        description: The user who wrote this comment
+        constraints:
+          immutable: true
+      body:
+        type: string
+        required: true
+        description: Comment text
+        constraints:
+          min_length: 1
+          max_length: 5000
+      created_at:
+        type: datetime
+        required: true
+        description: When the comment was posted
+        constraints:
+          immutable: true
+
+# ─── Behaviors ─────────────────────────────────────────────────
+
+behaviors:
+  create-task:
+    description: Create a new task in a project
+    actor: User
+    target_model: Task
+    preconditions:
+      - description: User must be a member of the project (or admin)
+        check: "user.role == 'admin' || project.members.contains(user.id)"
+      - description: Project must exist
+        check: "project != null"
+    effects:
+      - description: A new task is created with status 'todo'
+        mutation: "INSERT Task{status: 'todo'}"
+      - description: Project's updated_at is refreshed
+        mutation: "UPDATE Project SET updated_at = now()"
+    errors:
+      - code: PROJECT_NOT_FOUND
+        condition: "project == null"
+        message: The specified project does not exist
+        http_status: 404
+      - code: PERMISSION_DENIED
+        condition: "!user.isMember && user.role != 'admin'"
+        message: You are not a member of this project
+        http_status: 403
+
+  update-task:
+    description: Update task details (title, description, priority, assignee, due date)
+    actor: User
+    target_model: Task
+    preconditions:
+      - description: Task must exist
+        check: "task != null"
+      - description: User must be project member or admin
+        check: "user.role == 'admin' || project.members.contains(user.id)"
+    effects:
+      - description: Task fields are updated
+        mutation: "UPDATE Task SET {changed_fields}, updated_at = now()"
+    errors:
+      - code: TASK_NOT_FOUND
+        condition: "task == null"
+        message: The specified task does not exist
+        http_status: 404
+
+  transition-task:
+    description: Move a task to a new status (must follow state machine rules)
+    actor: User
+    target_model: Task
+    preconditions:
+      - description: Task must exist
+        check: "task != null"
+      - description: Transition must be valid per state machine
+        check: "task.states.transitions[current_status].contains(new_status)"
+    effects:
+      - description: Task status is changed
+        mutation: "UPDATE Task SET status = new_status, updated_at = now()"
+    errors:
+      - code: INVALID_TRANSITION
+        condition: "!transitions[current].contains(new)"
+        message: Cannot transition from current status to requested status
+        http_status: 422
+    cross_impact:
+      - target: Project
+        effect: "UPDATE Project SET updated_at = now()"
+        description: Project's updated_at reflects the latest task activity
+
+  delete-task:
+    description: Permanently delete a task and its comments
+    actor: User
+    target_model: Task
+    preconditions:
+      - description: Task must exist
+        check: "task != null"
+      - description: User must be project owner or admin
+        check: "user.role == 'admin' || project.owner_id == user.id"
+    effects:
+      - description: Task is deleted
+        mutation: "DELETE Task WHERE id = task.id"
+      - description: All comments on the task are deleted
+        mutation: "DELETE Comment WHERE task_id = task.id"
+    errors:
+      - code: TASK_NOT_FOUND
+        condition: "task == null"
+        message: The specified task does not exist
+        http_status: 404
+      - code: PERMISSION_DENIED
+        condition: "user is not owner or admin"
+        message: Only project owners and admins can delete tasks
+        http_status: 403
+    cross_impact:
+      - target: Comment
+        effect: "CASCADE DELETE"
+        description: All comments belonging to the deleted task are removed
+
+  add-comment:
+    description: Add a comment to a task
+    actor: User
+    target_model: Comment
+    preconditions:
+      - description: Task must exist
+        check: "task != null"
+      - description: User must be project member or admin
+        check: "user.role == 'admin' || project.members.contains(user.id)"
+    effects:
+      - description: A new comment is created
+        mutation: "INSERT Comment{task_id, author_id, body}"
+      - description: Task's updated_at is refreshed
+        mutation: "UPDATE Task SET updated_at = now()"
+    errors:
+      - code: TASK_NOT_FOUND
+        condition: "task == null"
+        message: The specified task does not exist
+        http_status: 404
+    cross_impact:
+      - target: Task
+        effect: "UPDATE Task SET updated_at = now()"
+        description: Adding a comment refreshes the task's last-modified timestamp
+
+  create-project:
+    description: Create a new project
+    actor: User
+    target_model: Project
+    preconditions:
+      - description: User must be authenticated
+        check: "user != null"
+      - description: Project name must be unique for this owner
+        check: "!exists(Project WHERE name = input.name AND owner_id = user.id)"
+    effects:
+      - description: A new project is created with the user as owner
+        mutation: "INSERT Project{owner_id: user.id, members: [user.id]}"
+    errors:
+      - code: DUPLICATE_PROJECT
+        condition: "name already exists for owner"
+        message: A project with this name already exists
+        http_status: 409
+
+# ─── APIs ──────────────────────────────────────────────────────
+
+apis:
+  list-tasks:
+    method: GET
+    path: /api/projects/{project_id}/tasks
+    summary: List tasks in a project with optional filters
+    behavior: ""
+    auth: true
+    request:
+      params:
+        project_id:
+          type: uuid
+          required: true
+          description: Project ID
+      query:
+        status:
+          type: string
+          required: false
+          description: "Filter by status (e.g. todo, in_progress)"
+        assignee_id:
+          type: uuid
+          required: false
+          description: Filter by assigned user
+        priority:
+          type: string
+          required: false
+          description: "Filter by priority (low, medium, high, critical)"
+        page:
+          type: int
+          required: false
+          description: Page number (default 1)
+        per_page:
+          type: int
+          required: false
+          description: Items per page (default 20, max 100)
+    response:
+      success:
+        status: 200
+        body:
+          type: "[]ref:Task"
+          pagination: true
+      errors:
+        - status: 404
+          code: PROJECT_NOT_FOUND
+          description: Project does not exist
+
+  create-task:
+    method: POST
+    path: /api/projects/{project_id}/tasks
+    summary: Create a new task
+    behavior: create-task
+    auth: true
+    request:
+      params:
+        project_id:
+          type: uuid
+          required: true
+          description: Project ID
+      body:
+        content_type: application/json
+        fields:
+          title:
+            type: string
+            required: true
+            description: Task title
+          description:
+            type: string
+            required: false
+            description: Task description
+          priority:
+            type: "enum:task-priority"
+            required: true
+            description: Task priority
+          assignee_id:
+            type: uuid
+            required: false
+            description: Assigned user ID
+          due_date:
+            type: datetime
+            required: false
+            description: Target completion date
+    response:
+      success:
+        status: 201
+        body:
+          type: "ref:Task"
+      errors:
+        - status: 404
+          code: PROJECT_NOT_FOUND
+          description: Project does not exist
+        - status: 403
+          code: PERMISSION_DENIED
+          description: User is not a project member
+
+  get-task:
+    method: GET
+    path: /api/tasks/{task_id}
+    summary: Get a single task by ID
+    auth: true
+    request:
+      params:
+        task_id:
+          type: uuid
+          required: true
+          description: Task ID
+    response:
+      success:
+        status: 200
+        body:
+          type: "ref:Task"
+      errors:
+        - status: 404
+          code: TASK_NOT_FOUND
+          description: Task does not exist
+
+  update-task:
+    method: PATCH
+    path: /api/tasks/{task_id}
+    summary: Update task details
+    behavior: update-task
+    auth: true
+    request:
+      params:
+        task_id:
+          type: uuid
+          required: true
+          description: Task ID
+      body:
+        content_type: application/json
+        fields:
+          title:
+            type: string
+            required: false
+            description: Updated title
+          description:
+            type: string
+            required: false
+            description: Updated description
+          priority:
+            type: "enum:task-priority"
+            required: false
+            description: Updated priority
+          assignee_id:
+            type: uuid
+            required: false
+            description: Updated assignee
+          due_date:
+            type: datetime
+            required: false
+            description: Updated due date
+    response:
+      success:
+        status: 200
+        body:
+          type: "ref:Task"
+      errors:
+        - status: 404
+          code: TASK_NOT_FOUND
+          description: Task does not exist
+
+  transition-task:
+    method: POST
+    path: /api/tasks/{task_id}/transition
+    summary: Transition a task to a new status
+    behavior: transition-task
+    auth: true
+    request:
+      params:
+        task_id:
+          type: uuid
+          required: true
+          description: Task ID
+      body:
+        content_type: application/json
+        fields:
+          status:
+            type: "enum:task-status"
+            required: true
+            description: Target status
+    response:
+      success:
+        status: 200
+        body:
+          type: "ref:Task"
+      errors:
+        - status: 404
+          code: TASK_NOT_FOUND
+          description: Task does not exist
+        - status: 422
+          code: INVALID_TRANSITION
+          description: Status transition is not allowed
+
+  delete-task:
+    method: DELETE
+    path: /api/tasks/{task_id}
+    summary: Delete a task
+    behavior: delete-task
+    auth: true
+    request:
+      params:
+        task_id:
+          type: uuid
+          required: true
+          description: Task ID
+    response:
+      success:
+        status: 204
+      errors:
+        - status: 404
+          code: TASK_NOT_FOUND
+          description: Task does not exist
+        - status: 403
+          code: PERMISSION_DENIED
+          description: Only owners and admins can delete
+
+  list-comments:
+    method: GET
+    path: /api/tasks/{task_id}/comments
+    summary: List comments on a task
+    auth: true
+    request:
+      params:
+        task_id:
+          type: uuid
+          required: true
+          description: Task ID
+    response:
+      success:
+        status: 200
+        body:
+          type: "[]ref:Comment"
+      errors:
+        - status: 404
+          code: TASK_NOT_FOUND
+          description: Task does not exist
+
+  add-comment:
+    method: POST
+    path: /api/tasks/{task_id}/comments
+    summary: Add a comment to a task
+    behavior: add-comment
+    auth: true
+    request:
+      params:
+        task_id:
+          type: uuid
+          required: true
+          description: Task ID
+      body:
+        content_type: application/json
+        fields:
+          body:
+            type: string
+            required: true
+            description: Comment text
+    response:
+      success:
+        status: 201
+        body:
+          type: "ref:Comment"
+      errors:
+        - status: 404
+          code: TASK_NOT_FOUND
+          description: Task does not exist
+
+  create-project:
+    method: POST
+    path: /api/projects
+    summary: Create a new project
+    behavior: create-project
+    auth: true
+    request:
+      body:
+        content_type: application/json
+        fields:
+          name:
+            type: string
+            required: true
+            description: Project name
+          description:
+            type: string
+            required: false
+            description: Project description
+    response:
+      success:
+        status: 201
+        body:
+          type: "ref:Project"
+      errors:
+        - status: 409
+          code: DUPLICATE_PROJECT
+          description: Project name already exists for this user
+
+  list-projects:
+    method: GET
+    path: /api/projects
+    summary: List projects the current user has access to
+    auth: true
+    request:
+      query:
+        page:
+          type: int
+          required: false
+          description: Page number
+        per_page:
+          type: int
+          required: false
+          description: Items per page
+    response:
+      success:
+        status: 200
+        body:
+          type: "[]ref:Project"
+          pagination: true
+
+# ─── UI ────────────────────────────────────────────────────────
+
+ui:
+  pages:
+    project-list:
+      type: list
+      path: /projects
+      title: My Projects
+      description: Overview of all projects the user has access to
+      data_source: list-projects
+      components:
+        - type: data-table
+          id: projects-table
+          props:
+            columns: [name, description, owner, task_count, updated_at]
+          actions:
+            - trigger: row-click
+              redirect: "/projects/{id}/tasks"
+        - type: button
+          id: create-project-btn
+          props:
+            label: New Project
+          actions:
+            - trigger: click
+              redirect: "/projects/new"
+
+    project-form:
+      type: form
+      path: /projects/new
+      title: Create Project
+      data_source: create-project
+      components:
+        - type: text-input
+          id: name-input
+          props:
+            field: name
+            label: Project Name
+            required: true
+        - type: textarea
+          id: desc-input
+          props:
+            field: description
+            label: Description
+        - type: button
+          id: submit-btn
+          props:
+            label: Create
+          actions:
+            - trigger: click
+              api: create-project
+              success_message: Project created successfully
+              redirect: "/projects/{id}/tasks"
+
+    task-board:
+      type: detail
+      path: "/projects/{project_id}/tasks"
+      title: Task Board
+      description: Kanban-style task board with filtering
+      data_source: list-tasks
+      components:
+        - type: filter-bar
+          id: task-filters
+          props:
+            filters: [status, priority, assignee_id]
+        - type: kanban-board
+          id: task-kanban
+          props:
+            group_by: status
+            columns: [todo, in_progress, in_review, done]
+          actions:
+            - trigger: card-drop
+              api: transition-task
+            - trigger: card-click
+              redirect: "/tasks/{id}"
+        - type: button
+          id: create-task-btn
+          props:
+            label: New Task
+          actions:
+            - trigger: click
+              redirect: "/projects/{project_id}/tasks/new"
+
+    task-form:
+      type: form
+      path: "/projects/{project_id}/tasks/new"
+      title: Create Task
+      data_source: create-task
+      components:
+        - type: text-input
+          id: title-input
+          props:
+            field: title
+            label: Title
+            required: true
+        - type: textarea
+          id: desc-input
+          props:
+            field: description
+            label: Description
+        - type: select
+          id: priority-select
+          props:
+            field: priority
+            label: Priority
+            options_enum: task-priority
+        - type: user-picker
+          id: assignee-picker
+          props:
+            field: assignee_id
+            label: Assignee
+        - type: date-picker
+          id: due-date-picker
+          props:
+            field: due_date
+            label: Due Date
+        - type: button
+          id: submit-btn
+          props:
+            label: Create Task
+          actions:
+            - trigger: click
+              api: create-task
+              success_message: Task created
+              redirect: "/projects/{project_id}/tasks"
+
+    task-detail:
+      type: detail
+      path: "/tasks/{task_id}"
+      title: Task Detail
+      data_source: get-task
+      components:
+        - type: detail-header
+          id: task-header
+          props:
+            fields: [title, status, priority, assignee, due_date]
+          actions:
+            - trigger: status-click
+              api: transition-task
+        - type: detail-body
+          id: task-body
+          props:
+            fields: [description]
+        - type: comment-list
+          id: comments
+          props:
+            data_source: list-comments
+          actions:
+            - trigger: submit-comment
+              api: add-comment
+              success_message: Comment added
+        - type: button-group
+          id: task-actions
+          actions:
+            - trigger: click-edit
+              redirect: "/tasks/{task_id}/edit"
+            - trigger: click-delete
+              api: delete-task
+              confirm: true
+              success_message: Task deleted
+              redirect: "/projects/{project_id}/tasks"
+
+# ─── Acceptance Criteria ───────────────────────────────────────
+
+acceptance:
+  - id: AC-001
+    title: User can create a project
+    scenario: >
+      Given an authenticated user,
+      when they submit a valid project form,
+      then a new project is created and they are redirected to the task board.
+    behaviors: [create-project]
+    apis: [create-project]
+    priority: high
+
+  - id: AC-002
+    title: User can create and assign a task
+    scenario: >
+      Given a project member on the task board,
+      when they create a task with title, priority and assignee,
+      then the task appears in the 'todo' column.
+    behaviors: [create-task]
+    apis: [create-task]
+    priority: high
+
+  - id: AC-003
+    title: Task status follows state machine
+    scenario: >
+      Given a task in 'todo' status,
+      when the assignee drags it to 'in_progress',
+      then the status updates; dragging to 'done' directly is rejected.
+    behaviors: [transition-task]
+    apis: [transition-task]
+    priority: high
+
+  - id: AC-004
+    title: Users can comment on tasks
+    scenario: >
+      Given a task detail page,
+      when a project member submits a comment,
+      then it appears in the comment list and the task's updated_at refreshes.
+    behaviors: [add-comment]
+    apis: [add-comment, list-comments]
+    priority: medium
+
+  - id: AC-005
+    title: Only owners/admins can delete tasks
+    scenario: >
+      Given a task detail page,
+      when a non-owner member clicks delete,
+      then they see a permission error.
+    behaviors: [delete-task]
+    apis: [delete-task]
+    priority: medium
+
+  - id: AC-006
+    title: Task list supports filtering
+    scenario: >
+      Given the task board with multiple tasks,
+      when the user filters by status='in_progress' and priority='high',
+      then only matching tasks are displayed.
+    apis: [list-tasks]
+    priority: medium
