@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/chenzhaohao/agentspec/internal/generate"
-	"github.com/chenzhaohao/agentspec/internal/util"
+	"github.com/HeyMax/agentspec/internal/generate"
+	"github.com/HeyMax/agentspec/internal/util"
 	"github.com/spf13/cobra"
 )
 

@@ -5,9 +5,9 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/chenzhaohao/agentspec/internal/diff"
-	"github.com/chenzhaohao/agentspec/internal/spec"
-	"github.com/chenzhaohao/agentspec/internal/util"
+	"github.com/HeyMax/agentspec/internal/diff"
+	"github.com/HeyMax/agentspec/internal/spec"
+	"github.com/HeyMax/agentspec/internal/util"
 	"github.com/spf13/cobra"
 )
 

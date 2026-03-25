@@ -1,4 +1,4 @@
-module github.com/chenzhaohao/agentspec
+module github.com/HeyMax/agentspec
 
 go 1.25.6
 

@@ -3,7 +3,7 @@ package schema
 import (
 	"fmt"
 
-	"github.com/chenzhaohao/agentspec/internal/spec"
+	"github.com/HeyMax/agentspec/internal/spec"
 )
 
 // validateCrossReferences checks for orphaned definitions and inter-section consistency.

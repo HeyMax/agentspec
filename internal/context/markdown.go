@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/chenzhaohao/agentspec/internal/spec"
+	"github.com/HeyMax/agentspec/internal/spec"
 )
 
 // RenderMarkdown produces a Markdown document from a FeatureSpec filtered by the given RoleConfig.

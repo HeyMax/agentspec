@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/chenzhaohao/agentspec/internal/spec"
+	"github.com/HeyMax/agentspec/internal/spec"
 )
 
 func checkAPICoverage(s *spec.FeatureSpec, sourceDir string, result *CheckResult) {

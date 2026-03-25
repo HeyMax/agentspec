@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/chenzhaohao/agentspec/internal/spec"
-	"github.com/chenzhaohao/agentspec/internal/util"
+	"github.com/HeyMax/agentspec/internal/spec"
+	"github.com/HeyMax/agentspec/internal/util"
 )
 
 func generateBackend(s *spec.FeatureSpec, outputDir string) error {

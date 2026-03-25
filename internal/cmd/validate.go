@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/chenzhaohao/agentspec/internal/schema"
-	"github.com/chenzhaohao/agentspec/internal/spec"
-	"github.com/chenzhaohao/agentspec/internal/util"
+	"github.com/HeyMax/agentspec/internal/schema"
+	"github.com/HeyMax/agentspec/internal/spec"
+	"github.com/HeyMax/agentspec/internal/util"
 	"github.com/spf13/cobra"
 )
 

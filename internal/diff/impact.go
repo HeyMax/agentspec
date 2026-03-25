@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/chenzhaohao/agentspec/internal/spec"
+	"github.com/HeyMax/agentspec/internal/spec"
 )
 
 // Impact describes the downstream effects of a Change.

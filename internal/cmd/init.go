@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/chenzhaohao/agentspec/internal/util"
+	"github.com/HeyMax/agentspec/internal/util"
 	"github.com/spf13/cobra"
 )
 

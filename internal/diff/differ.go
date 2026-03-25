@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/chenzhaohao/agentspec/internal/spec"
+	"github.com/HeyMax/agentspec/internal/spec"
 )
 
 type ChangeType string

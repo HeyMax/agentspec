@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	agentcontext "github.com/chenzhaohao/agentspec/internal/context"
+	agentcontext "github.com/HeyMax/agentspec/internal/context"
 	"github.com/spf13/cobra"
 )
 

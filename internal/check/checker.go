@@ -3,7 +3,7 @@ package check
 import (
 	"fmt"
 
-	"github.com/chenzhaohao/agentspec/internal/spec"
+	"github.com/HeyMax/agentspec/internal/spec"
 )
 
 // Finding represents a compliance check result.

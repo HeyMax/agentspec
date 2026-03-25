@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/chenzhaohao/agentspec/internal/spec"
+	"github.com/HeyMax/agentspec/internal/spec"
 )
 
 // Generate loads a spec file and produces role-filtered Markdown context.
